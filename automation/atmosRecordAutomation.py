@@ -90,49 +90,41 @@ def upload_file():
             font-style: italic;
         }
 
-        /* Modal Styling */
+        /* Success Modal */
         .modal {
+            display: none;
             position: fixed;
-            top: 0;
+            z-index: 1;
             left: 0;
+            top: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: none;
+            background-color: rgba(0, 0, 0, 0.4);
             justify-content: center;
             align-items: center;
-            z-index: 2000;
         }
         .modal-content {
             background-color: white;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            text-align: center;
-            font-size: 1.5em;
-            color: #28a745;
+            padding: 20px;
+            border-radius: 10px;
             width: 300px;
+            text-align: center;
         }
-        .ok-button {
-            padding: 18px 30px;
+        .modal button {
             background-color: #6BA539;
             color: white;
+            padding: 10px 20px;
             border: none;
-            border-radius: 8px;
-            font-size: 1.2em;
+            border-radius: 6px;
             cursor: pointer;
-            margin-top: 20px;
-            width: 100%;
-            box-sizing: border-box;
         }
-        .ok-button:hover {
-            background-color: #5a8e30;
-        }
-    </style>
+
+        
+        </style>
     </head>
     <body>
         <div class="container">
-            <form action="/convert" method="post" enctype="multipart/form-data">
+            <form id="file-form" action="/convert" method="post" enctype="multipart/form-data">
                 <div class="drop-zone" id="drop-zone">
                     <img src="/static/img/cloud.png" alt="Upload icon">
                     <p>Drag & Drop files here or click to upload</p>
@@ -140,66 +132,118 @@ def upload_file():
                 </div>
                 <div class="file-name" id="file-name"></div>
                 <button type="submit" class="convert-btn">Convert</button>
+                <div id="spinner"></div>  <!-- Spinning logo -->
             </form>
         </div>
+
+        <!-- Success Modal -->
+        <div id="success-modal" class="modal">
+            <div class="modal-content">
+                <p>Hang on, we're turning your file into something beautiful (or at least readable)!</p>
+                <button id="ok-btn">OK</button>
+            </div>
+        </div>
+
         <footer>
             <p>An ITS Internal Solution</p>
         </footer>
 
-        <!-- Modal for Success Message -->
-        <div id="modal" class="modal">
-            <div class="modal-content">
-                File converted successfully! The file will download shortly.
-                <button class="ok-button" onclick="closeModal()">OK</button>
-            </div>
-        </div>
+       <script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileName = document.getElementById('file-name');
+    const spinner = document.getElementById('spinner');
+    const successModal = document.getElementById('success-modal');
+    const okBtn = document.getElementById('ok-btn');
+    const form = document.getElementById('file-form');
 
-        <script>
-            const dropZone = document.getElementById('drop-zone');
-            const fileInput = document.getElementById('file-input');
-            const fileName = document.getElementById('file-name');
-            const modal = document.getElementById('modal');
+    dropZone.addEventListener('click', () => fileInput.click());
 
-            dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.backgroundColor = '#f0f0f0';
+    });
 
-            dropZone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropZone.style.backgroundColor = '#f0f0f0';
-            });
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.style.backgroundColor = 'white';
+    });
 
-            dropZone.addEventListener('dragleave', () => {
-                dropZone.style.backgroundColor = 'white';
-            });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.backgroundColor = 'white';
+        fileInput.files = e.dataTransfer.files;
+        updateFileNames();  // Update the file names display
+    });
 
-            dropZone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropZone.style.backgroundColor = 'white';
-                fileInput.files = e.dataTransfer.files;
-                updateFileNames();  // Update the file names display
-            });
+    fileInput.addEventListener('change', updateFileNames);
 
-            fileInput.addEventListener('change', updateFileNames);
+    function updateFileNames() {
+        if (fileInput.files.length > 0) {
+            const fileNames = Array.from(fileInput.files).map(file => file.name).join(', ');
+            fileName.textContent = `Selected files: ${fileNames}`;
+        } else {
+            fileName.textContent = '';
+        }
+    }
 
-            function updateFileNames() {
-                if (fileInput.files.length > 0) {
-                    const fileNames = Array.from(fileInput.files).map(file => file.name).join(', ');
-                    fileName.textContent = `Selected files: ${fileNames}`;
-                } else {
-                    fileName.textContent = '';
-                }
+    // Show success modal
+    function showSuccessModal() {
+        successModal.style.display = 'flex';  // Show the modal
+    }
+
+    okBtn.addEventListener('click', () => {
+        successModal.style.display = 'none';  // Hide the modal
+    });
+
+    // Listen to the form submission
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();  // Prevent the default form submission
+
+        const formData = new FormData(form);
+        spinner.style.display = 'block';  // Show the spinner
+
+        fetch('/convert', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.ok) {
+                // Show success modal immediately after the form is submitted
+                showSuccessModal();
+
+                // Trigger the file download
+                const disposition = response.headers.get('Content-Disposition');
+                const filenameMatch = disposition ? disposition.match(/filename="(.+)"/) : null;
+                const todayDate = new Date().toISOString().split('T')[0];  // Get today's date in YYYY-MM-DD format
+                const filename = filenameMatch && filenameMatch[1] ? filenameMatch[1] : `atmos_workday_conversion_${todayDate}.xlsx`;
+
+                console.log(filename);  // Example output: atmos_workday_conversion_2024-12-12.xlsx
+
+
+                return response.blob().then(blob => {
+                    // Create a link and trigger the download
+                    const downloadUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = filename;  // Use the dynamic filename from the response header
+                    a.click();
+                    URL.revokeObjectURL(downloadUrl);
+                });
+            } else {
+                throw new Error('Conversion failed');
             }
+        })
+        .catch(error => {
+            spinner.style.display = 'none';  // Hide spinner
+            alert("An error occurred during conversion.");
+        });
+    });
+    okBtn.addEventListener('click', () => {
+    successModal.style.display = 'none';  // Hide the modal
+    window.location.reload();  // Refresh the page
+});
+</script>
 
-            // Display success message modal
-            function showModal() {
-                modal.style.display = 'flex';
-            }
-
-            // Close modal and refresh page
-            function closeModal() {
-                modal.style.display = 'none';
-                location.reload();  // Refresh the page after file download
-            }
-        </script>
     </body>
     </html>
     '''
@@ -207,11 +251,11 @@ def upload_file():
 @app.route('/convert', methods=['POST'])
 def convert_file():
     if 'file' not in request.files:
-        return "No file part"
+        return "No file part", 400
     
     files = request.files.getlist('file')
     if not files:
-        return "No selected file"
+        return "No selected file", 400
     
     try:
         combined_df = pd.DataFrame()
@@ -251,7 +295,8 @@ def convert_file():
         return send_file(output, as_attachment=True, download_name=output_filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     
     except Exception as e:
-        return f"An error occurred: {e}"
+        return f"An error occurred: {str(e)}", 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
